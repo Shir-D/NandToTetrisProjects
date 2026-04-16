@@ -1,0 +1,52 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/Memory.hdl
+
+/**
+ * The complete address space of the Hack computer's memory,
+ * including RAM and memory-mapped I/O. 
+ * The chip facilitates read and write operations, as follows:
+ *     Read:  out(t) = Memory[address(t)](t)
+ *     Write: if load(t-1) then Memory[address(t-1)](t) = in(t-1)
+ * In words: the chip always outputs the value stored at the memory 
+ * location specified by address. If load==1, the in value is loaded 
+ * into the memory location specified by address. This value becomes 
+ * available through the out output from the next time step onward.
+ * Address space rules:
+ * Only the upper 16K+8K+1 words of the Memory chip are used. 
+ * Access to address>0x6000 is invalid. Access to any address in 
+ * the range 0x4000-0x5FFF results in accessing the screen memory 
+ * map. Access to address 0x6000 results in accessing the keyboard 
+ * memory map. The behavior in these addresses is described in the 
+ * Screen and Keyboard chip specifications given in the book.
+ */
+
+CHIP Memory {
+    IN in[16], load, address[15];
+    OUT out[16];
+
+    PARTS:
+
+    // The DMux channel the inputs to the right chip inside the Memory
+    // The sel is one of {00, 01, 10, 11} - the first two options indicate the address is between 0 to 16,383, so it
+    // refers to the RAM16K, the third indicates it is between 16,384 to 24,575, so it refers to the Screen Memory Map
+    // and the last is that the address is 24,576, and so it refers to the Keyboard Map
+    DMux4Way (in=load ,sel=address[13..14] ,a=aLoadRAM ,b=bLoadRAM ,c=loadScreenMM ,d=kbd);
+
+    // The Or gate is because the TWO first options refers to the RAM16K chip
+    Or (a=aLoadRAM ,b=bLoadRAM ,out=loadRAM);
+
+    // All this ensures that the each one of the chips (RAM16K, Screen Memory Map) is opened for writing only if
+    // load==1 AND the given address refers to it
+
+    RAM16K (in=in ,load=loadRAM ,address=address[0..13] ,out=outRAM);
+
+    Screen (in=in ,load=loadScreenMM ,address=address[0..12] ,out=outScreen);
+
+    Keyboard (out=outKBD);
+
+    // Now we have to decide which part should release its output out. The Mux gate will decide it
+    // using again the address two MSBs (just like the DMux did at the beginning)
+    Mux4Way16 (a=outRAM ,b=outRAM ,c=outScreen ,d=outKBD ,sel=address[13..14] ,out=out);
+}

@@ -1,0 +1,38 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/03/a/RAM64.hdl
+
+/**
+ * Memory of 64 registers, each 16 bit-wide. Out holds the value
+ * stored at the memory location specified by address. If load==1, then 
+ * the in value is loaded into the memory location specified by address 
+ * (the loaded value will be emitted to out from the next time step onward).
+ */
+
+CHIP RAM64 {
+    IN in[16], load, address[6];
+    OUT out[16];
+
+    PARTS:
+
+    // The DMux8Way gate sends the "load" value to the RAM8 chosen by the three most left digits of the
+    // address (which is used as the "select")
+    DMux8Way (in=load ,sel=address[3..5] ,a=dMuxA ,b=dMuxB ,c=dMuxC ,d=dMuxD ,e=dMuxE ,f=dMuxF ,g=dMuxG ,h=dMuxH);
+
+    // Each RAM8 gets as "load" 0 if it hadn't been chose (that's how the DMux8Way works),
+    // and the "load" value if it had. It gets as "address" the three most right digits
+    // of the original address, to choose which Register (from its inside) to choose
+    RAM8 (in=in ,load=dMuxA ,address=address[0..2] ,out=a);
+    RAM8 (in=in ,load=dMuxB ,address=address[0..2] ,out=b);
+    RAM8 (in=in ,load=dMuxC ,address=address[0..2] ,out=c);
+    RAM8 (in=in ,load=dMuxD ,address=address[0..2] ,out=d);
+    RAM8 (in=in ,load=dMuxE ,address=address[0..2] ,out=e);
+    RAM8 (in=in ,load=dMuxF ,address=address[0..2] ,out=f);
+    RAM8 (in=in ,load=dMuxG ,address=address[0..2] ,out=g);
+    RAM8 (in=in ,load=dMuxH ,address=address[0..2] ,out=h);
+
+    // The Mux8Way16 gate gets all the outputs from the 8 RAM8s and select which one to
+    // release out using the three most left digits of the "address" as the "select"
+    Mux8Way16 (a=a ,b=b ,c=c ,d=d ,e=e ,f=f ,g=g ,h=h ,sel=address[3..5] ,out=out);
+}

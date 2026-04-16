@@ -1,0 +1,101 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+
+    // If instruction MSB==0 --> A instruction, and we want to insert its value to ARegister
+    // else - its a C instruction
+
+    // First Mux: chooses between ALU output and instruction, out goes to ARegister
+    Not (in=instruction[15], out=NotInstructionMSB);
+    Mux16 (a=outALU ,b=instruction ,sel=NotInstructionMSB ,out=outMuxToARegister);
+
+    Or (a=instruction[5], b=NotInstructionMSB, out=loadA);
+    ARegister (in=outMuxToARegister ,load=loadA, out=outARegister, out[0..14]=addressM);
+
+    // Second Mux: chooses between ARegister output and inM, out goes to ALU
+    And (a=instruction[15], b=instruction[12], out=cInstructionAndTakeInM);
+    Mux16 (a=outARegister ,b=inM ,sel=cInstructionAndTakeInM ,out=outMuxToALU);
+
+    And (a=instruction[4], b=instruction[15], out=loadD);
+    DRegister (in=outALU ,load=loadD ,out=outDRegister);
+
+    ALU (x=outDRegister ,y=outMuxToALU ,zx=instruction[11] ,nx=instruction[10] ,zy=instruction[9] ,ny=instruction[8]
+         ,f=instruction[7], no=instruction[6] ,out=outALU, out=outM ,zr=zr ,ng=ng);
+
+    // ****************************************************************************************************************
+
+    // The g function, that checks the jump condition
+    // It uses the 3-j-bits (3 LSBs) from the instruction and the zr,ng values from the ALU
+
+    // We'll notice that:
+    // If outALU < 0, the jump is executed if j1=1
+    // If outALU = 0, the jump is executed if j2=1
+    // If outALU > 0, the jump is executed if j3=1
+
+    // Map the zr,ng results
+    Not (in=zr, out=notZero);
+    Not (in=ng, out=notNeg);
+    And (a=zr, b=notNeg, out=zero); // outALU = 0
+    And (a=notZero, b=ng, out=negative); // outALU < 0
+    And (a=notZero, b=notNeg, out=positive); // outALU > 0
+
+    // Map j1,j2,j3 bits and make sure it's a C instruction
+    And (a=instruction[15], b=instruction[2], out=j1);
+    And (a=negative, b=j1, out=jumpOption1); // (outALU < 0) AND (j1 == 1) AND (C instruction)
+    And (a=instruction[15], b=instruction[1], out=j2);
+    And (a=zero, b=j2, out=jumpOption2); // (outALU = 0) AND (j2 == 1) AND (C instruction)
+    And (a=instruction[15], b=instruction[0], out=j3);
+    And (a=positive, b=j3, out=jumpOption3); // (outALU > 0) AND (j3 == 1) AND (C instruction)
+
+    // g result
+    Or (a=jumpOption1, b=jumpOption2, out=jumpOption1OrJumpOption2);
+    Or (a=jumpOption1OrJumpOption2, b=jumpOption3, out=jmp);
+
+    // ****************************************************************************************************************
+
+    // PC resets itself if reset=1, else if load=1 takes in the outARegister (it happens if g returns TRUE),
+    // else if inc=1 - PC++. It happens only if the rest does not, therefore can be always TRUE, because it is the
+    // default situation
+    PC (in=outARegister ,load=jmp ,inc=true ,reset=reset ,out[0..14]=pc);
+
+    // instruction[3] goes out as writeM if we're in a C instruction
+    And (a=instruction[15], b=instruction[3] ,out=writeM);
+}

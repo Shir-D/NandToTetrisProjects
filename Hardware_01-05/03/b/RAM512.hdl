@@ -1,0 +1,38 @@
+// This file is part of the materials accompanying the book 
+// "The Elements of Computing Systems" by Nisan and Schocken, 
+// MIT Press. Book site: www.idc.ac.il/tecs
+// File name: projects/03/b/RAM512.hdl
+
+/**
+ * Memory of 512 registers, each 16 bit-wide. Out holds the value
+ * stored at the memory location specified by address. If load==1, then 
+ * the in value is loaded into the memory location specified by address 
+ * (the loaded value will be emitted to out from the next time step onward).
+ */
+
+CHIP RAM512 {
+    IN in[16], load, address[9];
+    OUT out[16];
+
+    PARTS:
+
+    // The DMux8Way gate sends the "load" value to the RAM64 chosen by the three most left digits of the
+    // address (which is used as the "select")
+    DMux8Way (in=load ,sel=address[6..8] ,a=dMuxA ,b=dMuxB ,c=dMuxC ,d=dMuxD ,e=dMuxE ,f=dMuxF ,g=dMuxG ,h=dMuxH);
+
+    // Each RAM64 gets as "load" 0 if it hadn't been chose (that's how the DMux8Way works),
+    // and the "load" value if it had. It gets as "address" the six most right digits
+    // of the original address, to choose which Register (from its inside) to choose
+    RAM64 (in=in ,load=dMuxA ,address=address[0..5] ,out=a);
+    RAM64 (in=in ,load=dMuxB ,address=address[0..5] ,out=b);
+    RAM64 (in=in ,load=dMuxC ,address=address[0..5] ,out=c);
+    RAM64 (in=in ,load=dMuxD ,address=address[0..5] ,out=d);
+    RAM64 (in=in ,load=dMuxE ,address=address[0..5] ,out=e);
+    RAM64 (in=in ,load=dMuxF ,address=address[0..5] ,out=f);
+    RAM64 (in=in ,load=dMuxG ,address=address[0..5] ,out=g);
+    RAM64 (in=in ,load=dMuxH ,address=address[0..5] ,out=h);
+
+    // The Mux8Way16 gate gets all the outputs from the 8 RAM64s and select which one to
+    // release out using the three most left digits of the "address" as the "select"
+    Mux8Way16 (a=a ,b=b ,c=c ,d=d ,e=e ,f=f ,g=g ,h=h ,sel=address[6..8] ,out=out);
+}
